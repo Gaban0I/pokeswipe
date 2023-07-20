@@ -1,8 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, PanResponder, Animated, TouchableOpacity, } from 'react-native';
-import Card from '../component/Card';
-import Loading from '../component/Loading';
-
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  PanResponder,
+  Animated,
+  TouchableOpacity,
+} from "react-native";
+import Card from "../component/Card";
+import Loading from "../component/Loading";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Link } from "expo-router";
 
 export default function App() {
   const [poke, setPoke] = useState([]);
@@ -10,24 +18,44 @@ export default function App() {
   const [likeOpacity] = useState(new Animated.Value(1));
   const [dislikeOpacity] = useState(new Animated.Value(1));
   const [pan] = useState(new Animated.ValueXY());
-  const [isLoading, setIsLoading] = useState(true)
-  const [pokeUrl, setPokeUrl] = useState("https://pokeapi.co/api/v2/pokemon")
+  const [isLoading, setIsLoading] = useState(true);
+  const [pokeUrl, setPokeUrl] = useState("https://pokeapi.co/api/v2/pokemon");
   useEffect(() => {
     getPoke();
   }, []);
+  useEffect(() => {
+    resetCard();
+  }, [currentIndex]);
 
-  const STORAGE_NAME = "PokeSwipe_734a1dc0-26df-11ee-be56-0242ac120002"
+  const [likedPokemons, setLikedPokemons] = useState({});
 
-  const handleSetFav = (id) => {
-    let dataStore = localStorage[STORAGE_NAME];
+  useEffect(() => {
+    (async () => {
+      const dataStore = await AsyncStorage.getItem(STORAGE_NAME);
+      setLikedPokemons(JSON.parse(dataStore) || {});
+    })();
+  }, []);
+
+  const STORAGE_NAME = "PokeSwipe_734a1dc0-26df-11ee-be56-0242ac120002";
+
+  const handleSetFav = async (id) => {
+    let dataStore = await AsyncStorage.getItem(STORAGE_NAME);
     if (!dataStore) {
       const newSavedStorage = {};
       newSavedStorage[id] = id;
-      localStorage[STORAGE_NAME] = JSON.stringify(newSavedStorage);
+      await AsyncStorage.setItem(STORAGE_NAME, JSON.stringify(newSavedStorage));
     } else {
       dataStore = JSON.parse(dataStore);
       dataStore[id] = id;
-      localStorage[STORAGE_NAME] = JSON.stringify(dataStore);
+      await AsyncStorage.setItem(STORAGE_NAME, JSON.stringify(dataStore));
+    }
+  };
+
+  const clearAllData = async () => {
+    try {
+      await AsyncStorage.clear();
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -50,16 +78,14 @@ export default function App() {
     }
   };
 
-
   const handleSwipe = (direction) => {
-    if (direction === 'right') {
+    if (direction === "right") {
       handleLike();
-    } else if (direction === 'left') {
+    } else if (direction === "left") {
       handleDislike();
     }
     if (currentIndex == poke.length - 2) getPoke();
     setCurrentIndex(currentIndex + 1);
-    resetCard();
   };
 
   const handleLike = () => {
@@ -68,9 +94,8 @@ export default function App() {
       duration: 300,
       useNativeDriver: false,
     }).start();
-    handleSetFav(currentIndex + 1)
+    handleSetFav(currentIndex + 1);
     if (currentIndex == poke.length - 2) getPoke();
-
     setCurrentIndex(currentIndex + 1);
   };
 
@@ -113,9 +138,9 @@ export default function App() {
     ),
     onPanResponderRelease: (event, gesture) => {
       if (gesture.dx > 120) {
-        handleSwipe('right');
+        handleSwipe("right");
       } else if (gesture.dx < -120) {
-        handleSwipe('left');
+        handleSwipe("left");
       } else {
         resetCard();
       }
@@ -131,10 +156,8 @@ export default function App() {
     }
     return poke.map((p, index) => {
       if (index === currentIndex) {
-        // Vérifier si le pokémon est déjà liké
-        const isLiked = localStorage[STORAGE_NAME] && JSON.parse(localStorage[STORAGE_NAME])[p.id] !== undefined;
+        const isLiked = likedPokemons[p.id] !== undefined;
         if (isLiked) {
-          // Passer au pokémon suivant
           if (currentIndex == poke.length - 2) getPoke();
           setCurrentIndex(currentIndex + 1);
           return null;
@@ -143,14 +166,20 @@ export default function App() {
           <Animated.View
             {...panResponder.panHandlers}
             key={p.name}
-            style={[styles.cardContainer,
-            {
-              transform: [
-                { translateX: pan.x },
-                { translateY: pan.y },
-                { rotate: pan.x.interpolate({ inputRange: [-200, 0, 200], outputRange: ['-30deg', '0deg', '30deg'] }) },
-              ],
-            },
+            style={[
+              styles.cardContainer,
+              {
+                transform: [
+                  { translateX: pan.x },
+                  { translateY: pan.y },
+                  {
+                    rotate: pan.x.interpolate({
+                      inputRange: [-200, 0, 200],
+                      outputRange: ["-30deg", "0deg", "30deg"],
+                    }),
+                  },
+                ],
+              },
             ]}
           >
             <Card
@@ -168,18 +197,30 @@ export default function App() {
     });
   };
 
-
-
   return (
     <View style={styles.container}>
       <View style={styles.swipeContainer}>
         {renderPokeCards()}
         <View style={styles.buttonsContainer}>
-          <TouchableOpacity style={[styles.button, { backgroundColor: 'red' }]} onPress={handleDislike}>
-            <Animated.Text style={[styles.buttonText, { opacity: dislikeOpacity }]}>Dislike</Animated.Text>
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: "red" }]}
+            onPress={handleDislike}
+          >
+            <Animated.Text
+              style={[styles.buttonText, { opacity: dislikeOpacity }]}
+            >
+              Dislike
+            </Animated.Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.button, { backgroundColor: 'green' }]} onPress={handleLike}>
-            <Animated.Text style={[styles.buttonText, { opacity: likeOpacity }]}>Like</Animated.Text>
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: "green" }]}
+            onPress={handleLike}
+          >
+            <Animated.Text
+              style={[styles.buttonText, { opacity: likeOpacity }]}
+            >
+              Like
+            </Animated.Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -190,26 +231,26 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#111",
+    alignItems: "center",
+    justifyContent: "center",
   },
   swipeContainer: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'space-around',
+    alignItems: "center",
+    justifyContent: "space-around",
     padding: 16,
     width: 400,
     maxWidth: "100%",
   },
   cardContainer: {
-    height: '80%',
-    alignItems: 'center',
-    justifyContent: 'center'
+    height: "80%",
+    alignItems: "center",
+    justifyContent: "center",
   },
   buttonsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
     marginTop: 16,
   },
   button: {
@@ -219,8 +260,8 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
   },
   buttonText: {
-    color: 'white',
+    color: "white",
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
 });
